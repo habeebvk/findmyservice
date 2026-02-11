@@ -246,7 +246,7 @@ class _HomePageState extends State<HomePage> {
                                               fontWeight: FontWeight.w500,
                                             ),
                                           ),
-                                          SizedBox(height: 8),
+                                          SizedBox(height: 5),
                                           Text(
                                             offer['description'],
                                             style: TextStyle(
@@ -457,11 +457,11 @@ class _HomePageState extends State<HomePage> {
           ),
           child: Icon(icon, color: color, size: 30),
         ),
-        SizedBox(height: 8),
+        SizedBox(height: 6),
         Text(
           title,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: FontWeight.w500,
             color: Colors.black87,
           ),
