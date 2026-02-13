@@ -70,7 +70,7 @@ class DatabaseService {
 
     Database db = await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: (db, version) async {
         if (roleName == 'main') {
           await _onCreateMain(db);
@@ -145,6 +145,20 @@ class DatabaseService {
             }
           }
         }
+        if (oldVersion < 6) {
+          if (roleName == 'main') {
+            try {
+              await db.execute('ALTER TABLE users ADD COLUMN phone TEXT');
+              await db.execute('ALTER TABLE users ADD COLUMN location TEXT');
+              await db.execute('ALTER TABLE users ADD COLUMN salary TEXT');
+              debugPrint(
+                "✅ Migration v6: Added phone, location, salary to users table",
+              );
+            } catch (e) {
+              debugPrint("⚠️ Migration v6 Note: $e");
+            }
+          }
+        }
       },
     );
 
@@ -161,7 +175,10 @@ class DatabaseService {
         password TEXT,
         role TEXT,
         workType TEXT,
-        profilePic TEXT
+        profilePic TEXT,
+        phone TEXT,
+        location TEXT,
+        salary TEXT
       )
     ''');
 
@@ -524,5 +541,28 @@ class DatabaseService {
   Future<int> deleteNotification(int id) async {
     Database db = await getDatabase('main');
     return await db.delete('notifications', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Get Workers by Role
+  Future<List<UserModel>> getWorkersByRole(String role) async {
+    Database db = await getDatabase('main');
+    String normalizedRole = role.toLowerCase();
+
+    // Some roles might match differently (e.g. Carpentry -> Carpenter)
+    String roleToQuery = normalizedRole;
+    if (normalizedRole == 'carpentry') roleToQuery = 'carpenter';
+    if (normalizedRole == 'plumbing') roleToQuery = 'plumber';
+    if (normalizedRole == 'electricals') roleToQuery = 'electrician';
+    if (normalizedRole == 'painting') roleToQuery = 'painter';
+    if (normalizedRole == 'cleaning') roleToQuery = 'cleaner';
+    if (normalizedRole == 'pest_care') roleToQuery = 'pest care';
+
+    List<Map<String, dynamic>> maps = await db.query(
+      'users',
+      where: 'role = ? OR LOWER(workType) = ?',
+      whereArgs: ['Worker', roleToQuery],
+    );
+
+    return maps.map((e) => UserModel.fromMap(e)).toList();
   }
 }

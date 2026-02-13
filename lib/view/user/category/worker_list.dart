@@ -1,107 +1,49 @@
+import 'package:findmyservicesapp/model/user_model.dart';
+import 'package:findmyservicesapp/services/database_service.dart';
 import 'package:findmyservicesapp/view/user/category/workers_details_page.dart';
 import 'package:flutter/material.dart';
 
-class ServiceList extends StatelessWidget {
+class ServiceList extends StatefulWidget {
   final String? role;
   const ServiceList({super.key, this.role});
 
-  final services = const [
-    {
-      "subtitle": "Darrell Steward",
-      "price": "₹60",
-      "rating": "4.8",
-      "icon": Icons.electrical_services,
-      "role": "electrician",
-    },
-    {
-      "subtitle": "Ronald Richards",
-      "price": "₹53",
-      "rating": "4.9",
-      "icon": Icons.plumbing,
-      "role": "plumber",
-    },
-    {
-      "subtitle": "Jimmy Hadson",
-      "price": "₹45",
-      "rating": "4.8",
-      "icon": Icons.handyman,
-      "role": "carpenter",
-    },
-    {
-      "subtitle": "Devon Lane",
-      "price": "₹78",
-      "rating": "5.0",
-      "icon": Icons.ac_unit,
-      "role": "mechanic",
-    },
-    {
-      "subtitle": "Jenny Wilson",
-      "price": "₹45",
-      "rating": "4.7",
-      "icon": Icons.cleaning_services,
-      "role": "cleaner",
-    },
-    {
-      "subtitle": "Alen Walker",
-      "price": "₹55",
-      "rating": "4.6",
-      "icon": Icons.format_paint,
-      "role": "painter",
-    },
-    {
-      "subtitle": "Robert Fox",
-      "price": "₹65",
-      "rating": "4.4",
-      "icon": Icons.handyman,
-      "role": "welder",
-    },
-    {
-      "subtitle": "Courtney Henry",
-      "price": "₹40",
-      "rating": "4.7",
-      "icon": Icons.bug_report,
-      "role": "pest_care",
-    },
-    {
-      "subtitle": "Albert Flores",
-      "price": "₹35",
-      "rating": "4.5",
-      "icon": Icons.grass,
-      "role": "gardening",
-    },
-    {
-      "subtitle": "Marvin McKinney",
-      "price": "₹50",
-      "rating": "4.8",
-      "icon": Icons.window,
-      "role": "glass_repair",
-    },
-  ];
+  @override
+  State<ServiceList> createState() => _ServiceListState();
+}
+
+class _ServiceListState extends State<ServiceList> {
+  List<UserModel> workers = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchWorkers();
+  }
+
+  Future<void> _fetchWorkers() async {
+    try {
+      final dbWorkers = await DatabaseService().getWorkersByRole(
+        widget.role ?? "",
+      );
+      setState(() {
+        workers = dbWorkers;
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint("Error fetching workers: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // For demo purposes, we match the first 3 letters of the role (e.g. "Car" for "Carpentry")
-    final filteredServices = role == null
-        ? services
-        : services
-              .where(
-                (s) => s['role'].toString().toLowerCase().contains(
-                  role!.toLowerCase().substring(0, 3),
-                ),
-              )
-              .toList();
-
-    // Show filtered services or all if none found (but now we have a carpenter!)
-    final displayServices = filteredServices.isNotEmpty
-        ? filteredServices
-        : services;
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
           icon: Icon(
             Icons.arrow_back,
             color: Colors.white,
@@ -109,117 +51,155 @@ class ServiceList extends StatelessWidget {
           ),
         ),
         title: Text(
-          role ?? 'Services',
+          widget.role ?? 'Services',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
         backgroundColor: Colors.orange,
       ),
-      body: ListView.builder(
-        padding: EdgeInsets.all(16),
-        itemCount: displayServices.length,
-        itemBuilder: (context, index) {
-          final service = displayServices[index];
-          return Card(
-            margin: EdgeInsets.only(bottom: 16),
-            child: Padding(
+      body: isLoading
+          ? Center(child: CircularProgressIndicator(color: Colors.orange))
+          : workers.isEmpty
+          ? Center(child: Text("No workers available for this category"))
+          : ListView.builder(
               padding: EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Service Icon
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.orange,
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    child: Icon(
-                      service['icon'] as IconData,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-
-                  SizedBox(width: 16),
-
-                  // Service Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              itemCount: workers.length,
+              itemBuilder: (context, index) {
+                final worker = workers[index];
+                return Card(
+                  margin: EdgeInsets.only(bottom: 16),
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Row(
                       children: [
-                        SizedBox(height: 4),
-                        Text(
-                          service['subtitle'].toString(),
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: Colors.orange,
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          child: Icon(
+                            _getIconForRole(worker.workType ?? ""),
+                            color: Colors.white,
+                            size: 24,
                           ),
                         ),
-                        SizedBox(height: 8),
-                        Row(
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                worker.name,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                worker.workType ?? "",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.location_on,
+                                    color: Colors.grey,
+                                    size: 14,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      worker.location ?? "N/A",
+                                      style: TextStyle(fontSize: 12),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.phone,
+                                    color: Colors.grey,
+                                    size: 14,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    worker.phone ?? "N/A",
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Icon(Icons.star, color: Colors.amber, size: 16),
-                            SizedBox(width: 4),
-                            Text(service['rating'].toString()),
+                            Text(
+                              '₹${worker.salary ?? "0"}/hr',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ServiceDetailPage(
+                                      workerName: worker.name,
+                                      serviceName: widget.role ?? 'Service',
+                                      role: worker.workType ?? 'worker',
+                                      price:
+                                          int.tryParse(worker.salary ?? '0') ??
+                                          0,
+                                    ),
+                                  ),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                'Book',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ),
                           ],
                         ),
                       ],
                     ),
                   ),
-
-                  // Price and Button
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '${service['price']}/day',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => ServiceDetailPage(
-                                workerName: service['subtitle'].toString(),
-                                serviceName: role ?? 'Service',
-                                role: service['role'].toString(),
-                                price:
-                                    int.tryParse(
-                                      service['price'].toString().replaceAll(
-                                        '₹',
-                                        '',
-                                      ),
-                                    ) ??
-                                    0,
-                              ),
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: Text(
-                          'Book',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
+  }
+
+  IconData _getIconForRole(String role) {
+    String lower = role.toLowerCase();
+    if (lower.contains("electrician")) return Icons.electrical_services;
+    if (lower.contains("plumber")) return Icons.plumbing;
+    if (lower.contains("carpenter")) return Icons.handyman;
+    if (lower.contains("painter")) return Icons.format_paint;
+    if (lower.contains("cleaner")) return Icons.cleaning_services;
+    if (lower.contains("mechanic")) return Icons.settings;
+    if (lower.contains("welder")) return Icons.handyman;
+    if (lower.contains("pest")) return Icons.bug_report;
+    if (lower.contains("garden")) return Icons.grass;
+    if (lower.contains("glass")) return Icons.window;
+    return Icons.work;
   }
 }

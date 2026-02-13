@@ -1,3 +1,4 @@
+import 'package:findmyservicesapp/view/admin/adminhome.dart';
 import 'package:findmyservicesapp/view/auth/register_screen.dart';
 import 'package:findmyservicesapp/view/taxi/home/bottom_navigation.dart';
 import 'package:findmyservicesapp/view/user/home/bottom_navigationbar.dart';
@@ -27,10 +28,22 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       try {
-        final user = await _databaseService.validateUser(
-          _emailController.text,
-          _passwordController.text,
-        );
+        final email = _emailController.text.trim().toLowerCase();
+        final password = _passwordController.text.trim();
+
+        // Static Admin Login Check
+        if (email == "admin@gmail.com" && password == "admin123") {
+          setState(() {
+            _isLoading = false;
+          });
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => AdminApprovalScreen()),
+          );
+          return;
+        }
+
+        final user = await _databaseService.validateUser(email, password);
 
         if (user != null) {
           AuthService().login(user);

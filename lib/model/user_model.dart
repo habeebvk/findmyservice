@@ -6,6 +6,9 @@ class UserModel {
   final String role;
   final String? workType;
   final String? profilePic;
+  final String? phone;
+  final String? location;
+  final String? salary;
 
   UserModel({
     this.id,
@@ -15,6 +18,9 @@ class UserModel {
     required this.role,
     this.workType,
     this.profilePic,
+    this.phone,
+    this.location,
+    this.salary,
   });
 
   Map<String, dynamic> toMap() {
@@ -26,6 +32,9 @@ class UserModel {
       'role': role,
       'workType': workType,
       'profilePic': profilePic,
+      'phone': phone,
+      'location': location,
+      'salary': salary,
     };
   }
 
@@ -38,6 +47,9 @@ class UserModel {
       role: map['role'],
       workType: map['workType'],
       profilePic: map['profilePic'],
+      phone: map['phone'],
+      location: map['location'],
+      salary: map['salary'],
     );
   }
 }
