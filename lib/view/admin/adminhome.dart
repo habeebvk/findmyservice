@@ -63,6 +63,7 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
     final _phoneController = TextEditingController();
     final _locationController = TextEditingController();
     final _salaryController = TextEditingController();
+    final _locationFocusNode = FocusNode();
     String? _selectedWorkType;
 
     showDialog(
@@ -123,6 +124,7 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                 SizedBox(height: 10),
                 GooglePlaceAutoCompleteTextField(
                   textEditingController: _locationController,
+                  focusNode: _locationFocusNode,
                   googleAPIKey:
                       "AIzaSyCnXk2YpbWjr5UgTFFflUgfDsagIqwwObE", // Replace with actual key
                   inputDecoration: _inputDecoration(
@@ -139,6 +141,11 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                     _locationController.selection = TextSelection.fromPosition(
                       TextPosition(offset: prediction.description?.length ?? 0),
                     );
+                    // Unfocus and refocus to fix cursor position
+                    _locationFocusNode.unfocus();
+                    Future.delayed(Duration(milliseconds: 100), () {
+                      _locationFocusNode.requestFocus();
+                    });
                   },
                 ),
                 SizedBox(height: 10),
@@ -212,7 +219,15 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
           ],
         ),
       ),
-    );
+    ).then((_) {
+      // Dispose controllers and focus node when dialog is closed
+      _nameController.dispose();
+      _emailController.dispose();
+      _phoneController.dispose();
+      _locationController.dispose();
+      _salaryController.dispose();
+      _locationFocusNode.dispose();
+    });
   }
 
   Widget _buildTextField(
