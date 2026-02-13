@@ -559,8 +559,8 @@ class DatabaseService {
 
     List<Map<String, dynamic>> maps = await db.query(
       'users',
-      where: 'role = ? OR LOWER(workType) = ?',
-      whereArgs: ['Worker', roleToQuery],
+      where: 'role = ? OR role = ? OR LOWER(workType) = ?',
+      whereArgs: ['Worker', 'Goods Taxi', roleToQuery],
     );
 
     return maps.map((e) => UserModel.fromMap(e)).toList();

@@ -100,6 +100,7 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                             "Pest Care",
                             "Glass Repair",
                             "Gardening",
+                            "Goods Taxi",
                           ]
                           .map(
                             (type) => DropdownMenuItem(
@@ -187,7 +188,9 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                   name: _nameController.text,
                   email: _emailController.text.trim().toLowerCase(),
                   password: _phoneController.text.trim(), // Phone as password
-                  role: "Worker",
+                  role: _selectedWorkType == "Goods Taxi"
+                      ? "Goods Taxi"
+                      : "Worker",
                   workType: _selectedWorkType,
                   phone: _phoneController.text,
                   location: _locationController.text,
@@ -254,7 +257,7 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                 );
               }
             },
-            icon: Icon(Icons.logout, color: Colors.white),
+            icon: Icon(Icons.logout, color: Colors.orange),
           ),
         ],
       ),

@@ -17,39 +17,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _salaryController = TextEditingController();
 
   // Customer specific
   final _customerPhoneController = TextEditingController();
   final _customerAddressController = TextEditingController();
-
-  // Worker specific
-  final _workerPhoneController = TextEditingController();
-  final _workTypeController = TextEditingController();
-  final _locationController = TextEditingController();
-  final _workerLicenseController = TextEditingController();
-
-  // Goods Taxi specific
-  final _vehicleTypeController = TextEditingController();
-  final _vehicleNumberController = TextEditingController();
-  final _taxiLicenseController = TextEditingController();
 
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
   bool _agreeToTerms = false;
   bool _isLoading = false;
 
-  String? _selectedRole; // Customer, Worker, Goods Taxi
-
   Future<void> _register() async {
     if (_formKey.currentState!.validate() && _agreeToTerms) {
-      if (_selectedRole == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Please select a role")));
-        return;
-      }
-
       setState(() {
         _isLoading = true;
       });
@@ -68,10 +47,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           name: _nameController.text,
           email: _emailController.text,
           password: _passwordController.text,
-          role: _selectedRole!,
-          workType: _selectedRole == "Worker"
-              ? _workTypeController.text
-              : (_selectedRole == "Goods Taxi" ? "taxi" : null),
+          role: "Customer",
+          phone: _customerPhoneController.text,
+          location: _customerAddressController.text,
+          workType: null,
         );
 
         final result = await _databaseService.insertUser(newUser);
@@ -166,37 +145,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       key: _formKey,
                       child: Column(
                         children: [
-                          // Role Dropdown
-                          DropdownButtonFormField<String>(
-                            value: _selectedRole,
-                            items: ["Customer", "Worker", "Goods Taxi"]
-                                .map(
-                                  (role) => DropdownMenuItem(
-                                    value: role,
-                                    child: Text(role),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedRole = value;
-                              });
-                            },
-                            decoration: InputDecoration(
-                              labelText: "Select Role",
-                              prefixIcon: Icon(
-                                Icons.group,
-                                color: Colors.orange,
-                              ),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                            ),
-                            validator: (value) =>
-                                value == null ? "Please select a role" : null,
-                          ),
-                          SizedBox(height: 10),
-
                           // Name
                           TextFormField(
                             controller: _nameController,
@@ -277,161 +225,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           SizedBox(height: 20),
 
                           // Customer Fields
-                          if (_selectedRole == "Customer") ...[
-                            TextFormField(
-                              controller: _customerPhoneController,
-                              decoration: _inputDecoration(
-                                "Phone Number",
-                                Icons.phone_android,
-                              ),
-                              validator: (v) =>
-                                  v == null || v.isEmpty ? "Enter phone" : null,
+                          TextFormField(
+                            controller: _customerPhoneController,
+                            decoration: _inputDecoration(
+                              "Phone Number",
+                              Icons.phone_android,
                             ),
-                            SizedBox(height: 20),
-                            TextFormField(
-                              controller: _customerAddressController,
-                              decoration: _inputDecoration(
-                                "Address",
-                                Icons.location_on,
-                              ),
-                              validator: (v) => v == null || v.isEmpty
-                                  ? "Enter address"
-                                  : null,
+                            validator: (v) =>
+                                v == null || v.isEmpty ? "Enter phone" : null,
+                          ),
+                          SizedBox(height: 20),
+                          TextFormField(
+                            controller: _customerAddressController,
+                            decoration: _inputDecoration(
+                              "Address",
+                              Icons.location_on,
                             ),
-                            SizedBox(height: 20),
-                          ],
-
-                          // Worker Fields
-                          if (_selectedRole == "Worker") ...[
-                            TextFormField(
-                              controller: _workerPhoneController,
-                              decoration: _inputDecoration(
-                                "Phone Number",
-                                Icons.phone_android,
-                              ),
-                              validator: (v) =>
-                                  v == null || v.isEmpty ? "Enter phone" : null,
-                            ),
-                            SizedBox(height: 20),
-                            DropdownButtonFormField<String>(
-                              value: _workTypeController.text.isEmpty
-                                  ? null
-                                  : _workTypeController.text,
-                              items:
-                                  [
-                                        "Plumber",
-                                        "Electrician",
-                                        "Carpenter",
-                                        "Painter",
-                                        "Welder",
-                                        "Cleaner",
-                                        "Mechanic",
-                                        "Pest Care",
-                                        "Glass Repair",
-                                        "Gardening",
-                                      ]
-                                      .map(
-                                        (type) => DropdownMenuItem(
-                                          value: type,
-                                          child: Text(type),
-                                        ),
-                                      )
-                                      .toList(),
-                              onChanged: (value) {
-                                setState(() {
-                                  _workTypeController.text = value!;
-                                });
-                              },
-                              decoration: _inputDecoration(
-                                "Select Work Type",
-                                Icons.work_outline,
-                              ),
-                              validator: (value) =>
-                                  value == null || value.isEmpty
-                                  ? "Please select work type"
-                                  : null,
-                            ),
-                            SizedBox(height: 20),
-
-                            // TextFormField(
-                            //   controller: _workTypeController,
-                            //   decoration:
-                            //       _inputDecoration("Type of Work", Icons.work_outline),
-                            //   validator: (v) =>
-                            //       v == null || v.isEmpty ? "Enter work type" : null,
-                            // ),
-                            SizedBox(height: 20),
-
-                            TextFormField(
-                              controller: _salaryController,
-                              keyboardType: TextInputType.number,
-                              decoration: _inputDecoration(
-                                "Salary (per hour)",
-                                Icons.currency_rupee,
-                              ),
-                              validator: (v) => v == null || v.isEmpty
-                                  ? "Enter salary per hour"
-                                  : null,
-                            ),
-                            SizedBox(height: 20),
-
-                            TextFormField(
-                              controller: _locationController,
-                              decoration: _inputDecoration(
-                                "Location",
-                                Icons.location_on,
-                              ),
-                              validator: (v) => v == null || v.isEmpty
-                                  ? "Enter location"
-                                  : null,
-                            ),
-                            SizedBox(height: 20),
-                            TextFormField(
-                              controller: _workerLicenseController,
-                              decoration: _inputDecoration(
-                                "License (optional)",
-                                Icons.badge,
-                              ),
-                            ),
-                            SizedBox(height: 20),
-                          ],
-
-                          // Goods Taxi Fields
-                          if (_selectedRole == "Goods Taxi") ...[
-                            TextFormField(
-                              controller: _vehicleTypeController,
-                              decoration: _inputDecoration(
-                                "Vehicle Type",
-                                Icons.local_shipping,
-                              ),
-                              validator: (v) => v == null || v.isEmpty
-                                  ? "Enter vehicle type"
-                                  : null,
-                            ),
-                            SizedBox(height: 20),
-                            TextFormField(
-                              controller: _vehicleNumberController,
-                              decoration: _inputDecoration(
-                                "Vehicle Number",
-                                Icons.numbers,
-                              ),
-                              validator: (v) => v == null || v.isEmpty
-                                  ? "Enter vehicle number"
-                                  : null,
-                            ),
-                            SizedBox(height: 20),
-                            TextFormField(
-                              controller: _taxiLicenseController,
-                              decoration: _inputDecoration(
-                                "License Number",
-                                Icons.badge,
-                              ),
-                              validator: (v) => v == null || v.isEmpty
-                                  ? "Enter license number"
-                                  : null,
-                            ),
-                            SizedBox(height: 20),
-                          ],
+                            validator: (v) =>
+                                v == null || v.isEmpty ? "Enter address" : null,
+                          ),
+                          SizedBox(height: 20),
 
                           // Terms
                           Row(
