@@ -577,49 +577,52 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       Expanded(
                         child: _buildVehicleOption(
-                          'Car',
-                          Icons.directions_car,
+                          'Lorry',
+                          null,
                           '₹120 / KM',
-                          selectedVehicle == 'Car',
+                          selectedVehicle == 'Lorry',
                           () {
                             setState(() {
-                              selectedVehicle = 'Car';
+                              selectedVehicle = 'Lorry';
                               rate = 120;
                               totalAmount = distanceKm * rate;
                             });
                           },
+                          imageAsset: 'assets/images/lorry.png',
                         ),
                       ),
                       SizedBox(width: 15),
                       Expanded(
                         child: _buildVehicleOption(
-                          'Bike',
-                          Icons.two_wheeler,
+                          'Ape pickup',
+                          null,
                           '₹50 / KM',
-                          selectedVehicle == 'Bike',
+                          selectedVehicle == 'Ape pickup',
                           () {
                             setState(() {
-                              selectedVehicle = 'Bike';
+                              selectedVehicle = 'Ape pickup';
                               rate = 50;
                               totalAmount = distanceKm * rate;
                             });
                           },
+                          imageAsset: 'assets/images/tuktuk.png',
                         ),
                       ),
                       SizedBox(width: 15),
                       Expanded(
                         child: _buildVehicleOption(
-                          'Auto',
-                          Icons.agriculture,
+                          'Van',
+                          null,
                           '₹80 / KM',
-                          selectedVehicle == 'Auto',
+                          selectedVehicle == 'Van',
                           () {
                             setState(() {
-                              selectedVehicle = 'Auto';
+                              selectedVehicle = 'Van';
                               rate = 80;
                               totalAmount = distanceKm * rate;
                             });
                           },
+                          imageAsset: 'assets/images/van.png',
                         ),
                       ),
                     ],
@@ -943,11 +946,12 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildVehicleOption(
     String name,
-    IconData icon,
+    IconData? icon,
     String price,
     bool isSelected,
-    VoidCallback onTap,
-  ) {
+    VoidCallback onTap, {
+    String? imageAsset,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -963,11 +967,19 @@ class _HomePageState extends State<HomePage> {
         ),
         child: Column(
           children: [
-            Icon(
-              icon,
-              size: 30,
-              color: isSelected ? Colors.orange : Colors.grey,
-            ),
+            if (imageAsset != null)
+              Image.asset(
+                imageAsset,
+                height: 60,
+                width: 60,
+                fit: BoxFit.contain,
+              )
+            else if (icon != null)
+              Icon(
+                icon,
+                size: 50,
+                color: isSelected ? Colors.orange : Colors.grey,
+              ),
             SizedBox(height: 5),
             Text(
               name,

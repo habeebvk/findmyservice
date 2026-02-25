@@ -9,6 +9,7 @@ class UserModel {
   final String? phone;
   final String? location;
   final String? salary;
+  final int isApproved; // 0 for pending, 1 for approved
 
   UserModel({
     this.id,
@@ -21,6 +22,7 @@ class UserModel {
     this.phone,
     this.location,
     this.salary,
+    this.isApproved = 1, // Default to 1 (approved)
   });
 
   Map<String, dynamic> toMap() {
@@ -35,6 +37,7 @@ class UserModel {
       'phone': phone,
       'location': location,
       'salary': salary,
+      'isApproved': isApproved,
     };
   }
 
@@ -50,6 +53,7 @@ class UserModel {
       phone: map['phone'],
       location: map['location'],
       salary: map['salary'],
+      isApproved: map['isApproved'] ?? 1,
     );
   }
 }

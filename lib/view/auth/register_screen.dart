@@ -18,7 +18,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  // Customer specific
+  // Role selection
+  String _selectedRole = "Customer";
+  String? _selectedWorkType;
+  final _salaryController = TextEditingController();
   final _customerPhoneController = TextEditingController();
   final _customerAddressController = TextEditingController();
 
@@ -45,12 +48,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
         final newUser = UserModel(
           name: _nameController.text,
-          email: _emailController.text,
+          email: _emailController.text.trim().toLowerCase(),
           password: _passwordController.text,
-          role: "Customer",
+          role: _selectedRole,
           phone: _customerPhoneController.text,
           location: _customerAddressController.text,
-          workType: null,
+          workType: _selectedRole == "Customer" ? null : _selectedWorkType,
+          salary: _selectedRole == "Customer" ? null : _salaryController.text,
+          isApproved: _selectedRole == "Customer" ? 1 : 0,
         );
 
         final result = await _databaseService.insertUser(newUser);
@@ -224,7 +229,88 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                           SizedBox(height: 20),
 
-                          // Customer Fields
+                          // Role Selection
+                          DropdownButtonFormField<String>(
+                            value: _selectedRole,
+                            items: ["Customer", "Worker", "Goods Taxi"]
+                                .map(
+                                  (role) => DropdownMenuItem(
+                                    value: role,
+                                    child: Text(role),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedRole = val!;
+                                if (_selectedRole == "Goods Taxi") {
+                                  _selectedWorkType = "Goods Taxi";
+                                } else if (_selectedRole == "Customer") {
+                                  _selectedWorkType = null;
+                                } else {
+                                  _selectedWorkType = null;
+                                }
+                              });
+                            },
+                            decoration: _inputDecoration("Role", Icons.people),
+                          ),
+                          SizedBox(height: 20),
+
+                          if (_selectedRole != "Customer") ...[
+                            // Provider specific fields
+                            if (_selectedRole == "Worker") ...[
+                              DropdownButtonFormField<String>(
+                                value: _selectedWorkType,
+                                items:
+                                    [
+                                          "Plumber",
+                                          "Electrician",
+                                          "Carpenter",
+                                          "Painter",
+                                          "Welder",
+                                          "Cleaner",
+                                          "Mechanic",
+                                          "Pest Care",
+                                          "Glass Repair",
+                                          "Gardening",
+                                        ]
+                                        .map(
+                                          (type) => DropdownMenuItem(
+                                            value: type,
+                                            child: Text(type),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (val) =>
+                                    setState(() => _selectedWorkType = val),
+                                decoration: _inputDecoration(
+                                  "Service Type",
+                                  Icons.work,
+                                ),
+                                validator: (v) =>
+                                    _selectedRole == "Worker" && v == null
+                                    ? "Select service"
+                                    : null,
+                              ),
+                              SizedBox(height: 20),
+                            ],
+                            TextFormField(
+                              controller: _salaryController,
+                              keyboardType: TextInputType.number,
+                              decoration: _inputDecoration(
+                                "Salary (per hour)",
+                                Icons.currency_rupee,
+                              ),
+                              validator: (v) =>
+                                  _selectedRole != "Customer" &&
+                                      (v == null || v.isEmpty)
+                                  ? "Enter salary"
+                                  : null,
+                            ),
+                            SizedBox(height: 20),
+                          ],
+
+                          // Phone & Address
                           TextFormField(
                             controller: _customerPhoneController,
                             decoration: _inputDecoration(

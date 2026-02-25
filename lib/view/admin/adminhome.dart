@@ -1,10 +1,9 @@
 import 'package:findmyservicesapp/model/user_model.dart';
 import 'package:findmyservicesapp/services/database_service.dart';
 import 'package:flutter/material.dart';
-import 'package:google_places_flutter/google_places_flutter.dart';
-import 'package:google_places_flutter/model/prediction.dart';
 import 'package:findmyservicesapp/services/auth_service.dart';
 import 'package:findmyservicesapp/view/auth/login_screen.dart';
+import 'package:findmyservicesapp/view/admin/add_worker_dialog.dart';
 
 class AdminApprovalScreen extends StatefulWidget {
   const AdminApprovalScreen({super.key});
@@ -27,12 +26,38 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
   Future<void> _loadWorkers() async {
     setState(() => _isLoadingWorkers = true);
     try {
-      final workers = await _databaseService.getWorkersByRole('Worker');
+      // Fetch both approved and pending workers
+      final workers = await _databaseService.getWorkersByRole(
+        'Worker',
+        onlyApproved: false,
+      );
       setState(() => _workers = workers);
     } catch (e) {
       debugPrint("Error loading workers: $e");
     } finally {
       setState(() => _isLoadingWorkers = false);
+    }
+  }
+
+  Future<void> _approveWorker(UserModel worker) async {
+    bool confirm = await showConfirmDialog(
+      "Approve ${worker.name} as a ${worker.role}?",
+    );
+    if (confirm) {
+      if (worker.id == null) return;
+      final result = await _databaseService.updateUserApprovalStatus(
+        worker.id!,
+        1,
+      );
+      if (result != -1) {
+        _loadWorkers();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("${worker.name} approved successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     }
   }
 
@@ -57,199 +82,30 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
         false;
   }
 
-  void _showAddWorkerDialog() {
-    final _nameController = TextEditingController();
-    final _emailController = TextEditingController();
-    final _phoneController = TextEditingController();
-    final _locationController = TextEditingController();
-    final _salaryController = TextEditingController();
-    final _locationFocusNode = FocusNode();
-    String? _selectedWorkType;
-
-    showDialog(
+  Future<void> _showAddWorkerDialog() async {
+    final String? result = await showDialog<String>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(
-            "Add New Worker",
-            style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildTextField(_nameController, "Name", Icons.person),
-                SizedBox(height: 10),
-                _buildTextField(
-                  _emailController,
-                  "Email",
-                  Icons.email,
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  value: _selectedWorkType,
-                  items:
-                      [
-                            "Plumber",
-                            "Electrician",
-                            "Carpenter",
-                            "Painter",
-                            "Welder",
-                            "Cleaner",
-                            "Mechanic",
-                            "Pest Care",
-                            "Glass Repair",
-                            "Gardening",
-                            "Goods Taxi",
-                          ]
-                          .map(
-                            (type) => DropdownMenuItem(
-                              value: type,
-                              child: Text(type),
-                            ),
-                          )
-                          .toList(),
-                  onChanged: (val) =>
-                      setDialogState(() => _selectedWorkType = val),
-                  decoration: _inputDecoration("Work Type", Icons.work),
-                ),
-                SizedBox(height: 10),
-                _buildTextField(
-                  _phoneController,
-                  "Phone Number",
-                  Icons.phone,
-                  keyboardType: TextInputType.phone,
-                ),
-                SizedBox(height: 10),
-                GooglePlaceAutoCompleteTextField(
-                  textEditingController: _locationController,
-                  focusNode: _locationFocusNode,
-                  googleAPIKey:
-                      "AIzaSyCnXk2YpbWjr5UgTFFflUgfDsagIqwwObE", // Replace with actual key
-                  inputDecoration: _inputDecoration(
-                    "Location",
-                    Icons.location_on,
-                  ),
-                  debounceTime: 800,
-                  countries: ["in"], // Example: India
-                  getPlaceDetailWithLatLng: (Prediction prediction) {
-                    _locationController.text = prediction.description ?? "";
-                  },
-                  itemClick: (Prediction prediction) {
-                    _locationController.text = prediction.description ?? "";
-                    _locationController.selection = TextSelection.fromPosition(
-                      TextPosition(offset: prediction.description?.length ?? 0),
-                    );
-                    // Unfocus and refocus to fix cursor position
-                    _locationFocusNode.unfocus();
-                    Future.delayed(Duration(milliseconds: 100), () {
-                      _locationFocusNode.requestFocus();
-                    });
-                  },
-                ),
-                SizedBox(height: 10),
-                _buildTextField(
-                  _salaryController,
-                  "Salary (per hour)",
-                  Icons.currency_rupee,
-                  keyboardType: TextInputType.number,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text("CANCEL", style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (_nameController.text.isEmpty ||
-                    _emailController.text.isEmpty ||
-                    _selectedWorkType == null ||
-                    _phoneController.text.isEmpty ||
-                    _locationController.text.isEmpty ||
-                    _salaryController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Please fill all fields")),
-                  );
-                  return;
-                }
-
-                // Check if email already exists
-                final exists = await DatabaseService().userExists(
-                  _emailController.text.trim().toLowerCase(),
-                );
-                if (exists) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text("Email already registered"),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
-
-                final newUser = UserModel(
-                  name: _nameController.text,
-                  email: _emailController.text.trim().toLowerCase(),
-                  password: _phoneController.text.trim(), // Phone as password
-                  role: _selectedWorkType == "Goods Taxi"
-                      ? "Goods Taxi"
-                      : "Worker",
-                  workType: _selectedWorkType,
-                  phone: _phoneController.text,
-                  location: _locationController.text,
-                  salary: _salaryController.text,
-                );
-
-                final result = await DatabaseService().insertUser(newUser);
-                if (result != -1) {
-                  Navigator.pop(context);
-                  _loadWorkers();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Worker added successfully!")),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              child: Text("SAVE", style: TextStyle(color: Colors.white)),
-            ),
-          ],
-        ),
-      ),
-    ).then((_) {
-      // Dispose controllers and focus node when dialog is closed
-      _nameController.dispose();
-      _emailController.dispose();
-      _phoneController.dispose();
-      _locationController.dispose();
-      _salaryController.dispose();
-      _locationFocusNode.dispose();
-    });
-  }
-
-  Widget _buildTextField(
-    TextEditingController controller,
-    String label,
-    IconData icon, {
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: keyboardType,
-      decoration: _inputDecoration(label, icon),
+      builder: (context) => const AddWorkerDialog(),
     );
-  }
 
-  InputDecoration _inputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, color: Colors.orange),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-    );
+    // Handle results safely after the dialog is fully closed and Navigator is stable
+    if (!mounted) return;
+
+    if (result == "success") {
+      // Small delay to allow Navigator transition to finish smoothly
+      Future.delayed(const Duration(milliseconds: 200), () {
+        if (mounted) {
+          _loadWorkers();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Worker added successfully!"),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      });
+    }
   }
 
   @override
@@ -297,11 +153,6 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                 },
               ),
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddWorkerDialog,
-        backgroundColor: Colors.orange,
-        child: Icon(Icons.add, color: Colors.white),
-      ),
     );
   }
 
@@ -342,9 +193,38 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                         w.email,
                         style: TextStyle(fontSize: 14, color: Colors.black54),
                       ),
+                      SizedBox(height: 4),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: w.isApproved == 1
+                              ? Colors.green.withAlpha(40)
+                              : Colors.orange.withAlpha(40),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          w.isApproved == 1 ? "Approved" : "Pending",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: w.isApproved == 1
+                                ? Colors.green
+                                : Colors.orange,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
+                if (w.isApproved == 0)
+                  IconButton(
+                    onPressed: () => _approveWorker(w),
+                    icon: Icon(Icons.check_circle, color: Colors.green),
+                    tooltip: "Approve Worker",
+                  ),
               ],
             ),
             SizedBox(height: 10),

@@ -70,7 +70,7 @@ class DatabaseService {
 
     Database db = await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: (db, version) async {
         if (roleName == 'main') {
           await _onCreateMain(db);
@@ -139,23 +139,20 @@ class DatabaseService {
                   isRead INTEGER DEFAULT 0
                 )
               ''');
-              debugPrint("✅ Migration v5: Created missing tables in main.db");
             } catch (e) {
               debugPrint("⚠️ Migration v5 Note: $e");
             }
           }
         }
-        if (oldVersion < 6) {
+        if (oldVersion < 7) {
           if (roleName == 'main') {
             try {
-              await db.execute('ALTER TABLE users ADD COLUMN phone TEXT');
-              await db.execute('ALTER TABLE users ADD COLUMN location TEXT');
-              await db.execute('ALTER TABLE users ADD COLUMN salary TEXT');
-              debugPrint(
-                "✅ Migration v6: Added phone, location, salary to users table",
+              await db.execute(
+                'ALTER TABLE users ADD COLUMN isApproved INTEGER DEFAULT 1',
               );
+              debugPrint("✅ Migration v7: Added isApproved column to users");
             } catch (e) {
-              debugPrint("⚠️ Migration v6 Note: $e");
+              debugPrint("⚠️ Migration v7 Note: $e");
             }
           }
         }
@@ -178,7 +175,8 @@ class DatabaseService {
         profilePic TEXT,
         phone TEXT,
         location TEXT,
-        salary TEXT
+        salary TEXT,
+        isApproved INTEGER DEFAULT 1
       )
     ''');
 
@@ -251,8 +249,26 @@ class DatabaseService {
   Future<int> insertUser(UserModel user) async {
     Database db = await getDatabase('main');
     try {
-      return await db.insert('users', user.toMap());
+      int result = await db.insert('users', user.toMap());
+      debugPrint("✅ User inserted successfully into main: ${user.email}");
+      return result;
     } catch (e) {
+      debugPrint("❌ Error inserting user into main: $e");
+      return -1;
+    }
+  }
+
+  Future<int> updateUserApprovalStatus(int userId, int status) async {
+    Database db = await getDatabase('main');
+    try {
+      return await db.update(
+        'users',
+        {'isApproved': status},
+        where: 'id = ?',
+        whereArgs: [userId],
+      );
+    } catch (e) {
+      debugPrint("❌ Error updating user approval status: $e");
       return -1;
     }
   }
@@ -544,25 +560,60 @@ class DatabaseService {
   }
 
   // Get Workers by Role
-  Future<List<UserModel>> getWorkersByRole(String role) async {
+  Future<List<UserModel>> getWorkersByRole(
+    String role, {
+    bool onlyApproved = true,
+  }) async {
     Database db = await getDatabase('main');
-    String normalizedRole = role.toLowerCase();
+    String normalizedRole = role.trim().toLowerCase();
 
-    // Some roles might match differently (e.g. Carpentry -> Carpenter)
-    String roleToQuery = normalizedRole;
-    if (normalizedRole == 'carpentry') roleToQuery = 'carpenter';
-    if (normalizedRole == 'plumbing') roleToQuery = 'plumber';
-    if (normalizedRole == 'electricals') roleToQuery = 'electrician';
-    if (normalizedRole == 'painting') roleToQuery = 'painter';
-    if (normalizedRole == 'cleaning') roleToQuery = 'cleaner';
-    if (normalizedRole == 'pest_care') roleToQuery = 'pest care';
+    debugPrint("🔍 getWorkersByRole: Input role=$role");
+
+    String whereClause;
+    List<dynamic> whereArgs;
+
+    if (normalizedRole == 'worker') {
+      // Admin Panel: Fetch all service providers regardless of specific workType
+      whereClause = '(role = ? OR role = ?)';
+      whereArgs = ['Worker', 'Goods Taxi'];
+    } else if (normalizedRole == 'goods taxi') {
+      // User Category or Admin: Fetch all Goods Taxi providers
+      whereClause = 'role = ?';
+      whereArgs = ['Goods Taxi'];
+    } else {
+      // User Specific Category: Match the workType exactly (case-insensitive)
+      String workTypeToQuery = normalizedRole;
+
+      // Handle common variations in category names vs stored workType
+      if (normalizedRole == 'carpentry') workTypeToQuery = 'carpenter';
+      if (normalizedRole == 'plumbing') workTypeToQuery = 'plumber';
+      if (normalizedRole == 'electricals') workTypeToQuery = 'electrician';
+      if (normalizedRole == 'painting') workTypeToQuery = 'painter';
+      if (normalizedRole == 'cleaning') workTypeToQuery = 'cleaner';
+      if (normalizedRole == 'welding') workTypeToQuery = 'welder';
+      if (normalizedRole == 'pest_care' || normalizedRole == 'pest care') {
+        workTypeToQuery = 'pest care';
+      }
+
+      whereClause = 'LOWER(workType) = ?';
+      whereArgs = [workTypeToQuery];
+    }
+
+    if (onlyApproved) {
+      whereClause += ' AND isApproved = 1';
+    }
+
+    debugPrint(
+      "🔍 Query: SELECT * FROM users WHERE $whereClause with args=$whereArgs",
+    );
 
     List<Map<String, dynamic>> maps = await db.query(
       'users',
-      where: 'role = ? OR role = ? OR LOWER(workType) = ?',
-      whereArgs: ['Worker', 'Goods Taxi', roleToQuery],
+      where: whereClause,
+      whereArgs: whereArgs,
     );
 
+    debugPrint("✅ getWorkersByRole: Found ${maps.length} results");
     return maps.map((e) => UserModel.fromMap(e)).toList();
   }
 }

@@ -46,8 +46,25 @@ class _LoginScreenState extends State<LoginScreen> {
         final user = await _databaseService.validateUser(email, password);
 
         if (user != null) {
-          AuthService().login(user);
           final role = user.role;
+
+          // Check approval status for providers
+          if (role != "Customer" && user.isApproved == 0) {
+            setState(() {
+              _isLoading = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  "Your account is pending admin approval. Please wait.",
+                ),
+                backgroundColor: Colors.orange,
+              ),
+            );
+            return;
+          }
+
+          AuthService().login(user);
           if (role == "Customer") {
             Navigator.pushReplacement(
               context,
