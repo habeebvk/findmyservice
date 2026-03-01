@@ -542,7 +542,7 @@ class _HomePageState extends State<HomePage> {
 
         return StatefulBuilder(
           builder: (context, setState) => Container(
-            height: MediaQuery.of(context).size.height * 0.70,
+            height: MediaQuery.of(context).size.height * 0.80,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
@@ -580,17 +580,6 @@ class _HomePageState extends State<HomePage> {
                     'Where to?',
                     Icons.location_on,
                     toController,
-                  ),
-                  SizedBox(height: 20),
-
-                  // Distance Input
-                  Text(
-                    'Distance',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black87,
-                    ),
                   ),
                   SizedBox(height: 20),
                   Text(
@@ -705,7 +694,7 @@ class _HomePageState extends State<HomePage> {
                           );
 
                           _razorpayService.openPayment(
-                            amount: totalAmount.toInt() * 100, // to paise
+                            amount: (totalAmount * 100).toInt(), // to paise
                             name: "Find My Services",
                             description: "Taxi Booking Fee",
                             contact: user?.phone ?? "9999999999",
