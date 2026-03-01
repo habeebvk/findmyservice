@@ -135,6 +135,63 @@ class _ServiceListState extends State<ServiceList> {
                                   ),
                                 ],
                               ),
+                              SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.history,
+                                    color: Colors.grey,
+                                    size: 14,
+                                  ),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    "${worker.experience ?? 'N/A'} exp",
+                                    style: TextStyle(fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              FutureBuilder<double?>(
+                                future: DatabaseService()
+                                    .getWorkerAverageRating(
+                                      workerName: worker.name,
+                                      role: widget.role ?? 'service',
+                                    ),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState ==
+                                      ConnectionState.waiting) {
+                                    return const SizedBox(
+                                      height: 14,
+                                      width: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.orange,
+                                      ),
+                                    );
+                                  }
+                                  final rating = snapshot.data;
+                                  return Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.star,
+                                        color: Colors.orange,
+                                        size: 14,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        rating == null
+                                            ? "New"
+                                            : rating.toStringAsFixed(1),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.orange[800],
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
                             ],
                           ),
                         ),
@@ -162,6 +219,8 @@ class _ServiceListState extends State<ServiceList> {
                                       price:
                                           int.tryParse(worker.salary ?? '0') ??
                                           0,
+                                      experience: worker.experience,
+                                      description: worker.description,
                                     ),
                                   ),
                                 );

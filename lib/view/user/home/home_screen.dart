@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../services/database_service.dart';
 import '../../../model/user_request.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/razorpay_service.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -14,6 +16,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  late RazorpayService _razorpayService;
+  UserRequest? _pendingTaxiRequest;
 
   final List<Map<String, dynamic>> categories = [
     {"title": "Carpentry", "icon": Icons.handyman, "color": Colors.brown},
@@ -76,6 +80,55 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     // Auto-scroll carousel
     Future.delayed(Duration(seconds: 3), _autoScroll);
+    _razorpayService = RazorpayService(
+      onSuccess: _handlePaymentSuccess,
+      onFailure: _handlePaymentFailure,
+    );
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    if (_pendingTaxiRequest != null) {
+      try {
+        final requestWithPayment = UserRequest(
+          id: _pendingTaxiRequest!.id,
+          service: _pendingTaxiRequest!.service,
+          workerName: _pendingTaxiRequest!.workerName,
+          customerName: _pendingTaxiRequest!.customerName,
+          requestDate: _pendingTaxiRequest!.requestDate,
+          status: _pendingTaxiRequest!.status,
+          price: _pendingTaxiRequest!.price,
+          description: _pendingTaxiRequest!.description,
+          paymentStatus: 'paid',
+          transactionId: response.paymentId,
+        );
+
+        await DatabaseService().insertBooking(requestWithPayment, role: 'taxi');
+        _pendingTaxiRequest = null;
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Payment Successful! Taxi booked.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint("Error saving taxi booking: $e");
+      }
+    }
+  }
+
+  void _handlePaymentFailure(PaymentFailureResponse response) {
+    _pendingTaxiRequest = null;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Payment Failed: ${response.message}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void showNearbyPlaces(BuildContext context) async {
@@ -110,6 +163,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _pageController.dispose();
+    _razorpayService.dispose();
     super.dispose();
   }
 
@@ -488,7 +542,7 @@ class _HomePageState extends State<HomePage> {
 
         return StatefulBuilder(
           builder: (context, setState) => Container(
-            height: MediaQuery.of(context).size.height * 0.85,
+            height: MediaQuery.of(context).size.height * 0.70,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
@@ -536,34 +590,6 @@ class _HomePageState extends State<HomePage> {
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: Colors.black87,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: TextField(
-                      controller: distanceController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: "Enter Distance (KM)",
-                        hintStyle: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 16,
-                        ),
-                        prefixIcon: Icon(Icons.route, color: Colors.grey),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 15,
-                          vertical: 12,
-                        ),
-                      ),
-                      onChanged: (value) {
-                        distanceKm = double.tryParse(value) ?? 0;
-                        setState(() => totalAmount = distanceKm * rate);
-                      },
                     ),
                   ),
                   SizedBox(height: 20),
@@ -627,23 +653,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ],
                   ),
-
-                  SizedBox(height: 25),
-
-                  // Display Total
-                  Center(
-                    child: Text(
-                      "Total Amount: ₹${totalAmount.toStringAsFixed(2)}",
-                      style: TextStyle(
-                        fontSize: 23,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
-                      ),
-                    ),
-                  ),
-
-                  Spacer(),
-
+                  SizedBox(height: 20),
                   // Book Now Button
                   Container(
                     width: double.infinity,
@@ -680,12 +690,11 @@ class _HomePageState extends State<HomePage> {
                             return;
                           }
 
-                          final databaseService = DatabaseService();
-                          final request = UserRequest(
+                          final user = AuthService().currentUser;
+                          _pendingTaxiRequest = UserRequest(
                             service: 'Taxi Booking',
                             workerName: 'Pending Assignment',
-                            customerName:
-                                AuthService().currentUser?.name ?? "Guest User",
+                            customerName: user?.name ?? "Guest User",
                             requestDate: DateTime.now().toString().split(
                               '.',
                             )[0],
@@ -695,25 +704,22 @@ class _HomePageState extends State<HomePage> {
                                 'Taxi booking: ${fromController.text} to ${toController.text} via $selectedVehicle ($distanceKm km)',
                           );
 
-                          await databaseService.insertBooking(
-                            request,
-                            role: 'taxi',
+                          _razorpayService.openPayment(
+                            amount: totalAmount.toInt() * 100, // to paise
+                            name: "Find My Services",
+                            description: "Taxi Booking Fee",
+                            contact: user?.phone ?? "9999999999",
+                            email: user?.email ?? "test@example.com",
                           );
 
                           if (context.mounted) {
                             Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Taxi booked successfully!'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
                           }
                         } catch (e) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Error booking taxi: $e'),
+                                content: Text('Error: $e'),
                                 backgroundColor: Colors.red,
                               ),
                             );

@@ -64,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
             return;
           }
 
-          AuthService().login(user);
+          await AuthService().login(user);
           if (role == "Customer") {
             Navigator.pushReplacement(
               context,

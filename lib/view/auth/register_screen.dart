@@ -22,8 +22,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _selectedRole = "Customer";
   String? _selectedWorkType;
   final _salaryController = TextEditingController();
+  final _experienceController = TextEditingController();
   final _customerPhoneController = TextEditingController();
   final _customerAddressController = TextEditingController();
+  final _descriptionController = TextEditingController();
 
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
@@ -55,6 +57,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
           location: _customerAddressController.text,
           workType: _selectedRole == "Customer" ? null : _selectedWorkType,
           salary: _selectedRole == "Customer" ? null : _salaryController.text,
+          experience: _selectedRole == "Customer"
+              ? null
+              : _experienceController.text,
+          description: _selectedRole == "Customer"
+              ? null
+              : _descriptionController.text,
           isApproved: _selectedRole == "Customer" ? 1 : 0,
         );
 
@@ -168,9 +176,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             decoration: _inputDecoration("Email", Icons.email),
-                            validator: (v) => v == null || !v.contains("@")
-                                ? "Enter valid email"
-                                : null,
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return "Enter email";
+                              final regex = RegExp(
+                                r"^[a-zA-Z]+@[a-zA-Z]+\.[a-zA-Z]+$",
+                              );
+                              if (!regex.hasMatch(v)) {
+                                return "Email must contain only alphabets (e.g. abc@def.com)";
+                              }
+                              return null;
+                            },
                           ),
                           SizedBox(height: 20),
 
@@ -298,13 +313,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               controller: _salaryController,
                               keyboardType: TextInputType.number,
                               decoration: _inputDecoration(
-                                "Salary (per hour)",
+                                "Wages (per hour)",
                                 Icons.currency_rupee,
                               ),
                               validator: (v) =>
                                   _selectedRole != "Customer" &&
                                       (v == null || v.isEmpty)
-                                  ? "Enter salary"
+                                  ? "Enter wages"
+                                  : null,
+                            ),
+                            SizedBox(height: 20),
+                            TextFormField(
+                              controller: _experienceController,
+                              decoration: _inputDecoration(
+                                "Experience (e.g. 5 years)",
+                                Icons.history,
+                              ),
+                              validator: (v) =>
+                                  _selectedRole != "Customer" &&
+                                      (v == null || v.isEmpty)
+                                  ? "Enter experience"
+                                  : null,
+                            ),
+                            SizedBox(height: 20),
+                            TextFormField(
+                              controller: _descriptionController,
+                              maxLines: 3,
+                              decoration: _inputDecoration(
+                                "About You / Description",
+                                Icons.description,
+                              ),
+                              validator: (v) =>
+                                  _selectedRole != "Customer" &&
+                                      (v == null || v.isEmpty)
+                                  ? "Enter description"
                                   : null,
                             ),
                             SizedBox(height: 20),

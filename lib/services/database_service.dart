@@ -70,7 +70,7 @@ class DatabaseService {
 
     Database db = await openDatabase(
       path,
-      version: 7,
+      version: 10,
       onCreate: (db, version) async {
         if (roleName == 'main') {
           await _onCreateMain(db);
@@ -156,6 +156,43 @@ class DatabaseService {
             }
           }
         }
+        if (oldVersion < 8) {
+          if (roleName == 'main') {
+            try {
+              await db.execute('ALTER TABLE users ADD COLUMN experience TEXT');
+              debugPrint("✅ Migration v8: Added experience column to users");
+            } catch (e) {
+              debugPrint("⚠️ Migration v8 Note: $e");
+            }
+          }
+        }
+        if (oldVersion < 9) {
+          if (roleName != 'main') {
+            try {
+              await db.execute(
+                "ALTER TABLE bookings ADD COLUMN paymentStatus TEXT DEFAULT 'unpaid'",
+              );
+              await db.execute(
+                "ALTER TABLE bookings ADD COLUMN transactionId TEXT",
+              );
+              debugPrint(
+                "✅ Migration v9: Added payment columns to bookings for $roleName",
+              );
+            } catch (e) {
+              debugPrint("⚠️ Migration v9 Note: $e");
+            }
+          }
+        }
+        if (oldVersion < 10) {
+          if (roleName == 'main') {
+            try {
+              await db.execute('ALTER TABLE users ADD COLUMN description TEXT');
+              debugPrint("✅ Migration v10: Added description column to users");
+            } catch (e) {
+              debugPrint("⚠️ Migration v10 Note: $e");
+            }
+          }
+        }
       },
     );
 
@@ -176,6 +213,8 @@ class DatabaseService {
         phone TEXT,
         location TEXT,
         salary TEXT,
+        experience TEXT,
+        description TEXT,
         isApproved INTEGER DEFAULT 1
       )
     ''');
@@ -217,7 +256,9 @@ class DatabaseService {
         requestDate TEXT,
         status TEXT,
         price INTEGER,
-        description TEXT
+        description TEXT,
+        paymentStatus TEXT DEFAULT 'unpaid',
+        transactionId TEXT
       )
     ''');
 
@@ -302,6 +343,16 @@ class DatabaseService {
     return null;
   }
 
+  Future<int> deleteUser(int userId) async {
+    Database db = await getDatabase('main');
+    try {
+      return await db.delete('users', where: 'id = ?', whereArgs: [userId]);
+    } catch (e) {
+      debugPrint("❌ Error deleting user: $e");
+      return -1;
+    }
+  }
+
   Future<bool> userExists(String email) async {
     Database db = await getDatabase('main');
     List<Map<String, dynamic>> maps = await db.query(
@@ -327,6 +378,8 @@ class DatabaseService {
       status: booking.status,
       price: booking.price,
       description: booking.description,
+      paymentStatus: booking.paymentStatus,
+      transactionId: booking.transactionId,
     );
 
     int result = await db.insert('bookings', processedBooking.toMap());
@@ -400,6 +453,25 @@ class DatabaseService {
     Map<String, dynamic> values = {'status': status.toLowerCase()};
     if (workerName != null) {
       values['workerName'] = workerName;
+    }
+    return await db.update(
+      'bookings',
+      values,
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<int> updatePaymentStatus(
+    int id,
+    String paymentStatus, {
+    String? transactionId,
+    String? role,
+  }) async {
+    Database db = await getDatabase(role);
+    Map<String, dynamic> values = {'paymentStatus': paymentStatus};
+    if (transactionId != null) {
+      values['transactionId'] = transactionId;
     }
     return await db.update(
       'bookings',
@@ -510,6 +582,30 @@ class DatabaseService {
     return await db.delete('reviews', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<double?> getWorkerAverageRating({
+    required String workerName,
+    required String? role,
+  }) async {
+    if (role == null) return null;
+    final normalizedRole = normalizeRole(role.trim());
+    final normalizedWorker = workerName.trim().toLowerCase();
+
+    try {
+      Database db = await getDatabase(normalizedRole);
+      List<Map<String, dynamic>> result = await db.rawQuery(
+        'SELECT AVG(rating) as average FROM reviews WHERE LOWER(workerName) = ?',
+        [normalizedWorker],
+      );
+
+      if (result.isNotEmpty && result.first['average'] != null) {
+        return (result.first['average'] as num).toDouble();
+      }
+    } catch (e) {
+      debugPrint("❌ Error calculating average rating: $e");
+    }
+    return null;
+  }
+
   Future<int> deleteAllReviews({required String role}) async {
     final normalizedRole = normalizeRole(role.trim());
     debugPrint("🗑️ Deleting ALL reviews from $normalizedRole DB");
@@ -615,5 +711,67 @@ class DatabaseService {
 
     debugPrint("✅ getWorkersByRole: Found ${maps.length} results");
     return maps.map((e) => UserModel.fromMap(e)).toList();
+  }
+
+  Future<Map<String, int>> getAdminStats() async {
+    Database db = await getDatabase('main');
+    Map<String, int> stats = {};
+
+    try {
+      // Total Users
+      List<Map<String, dynamic>> userCount = await db.rawQuery(
+        "SELECT COUNT(*) as count FROM users WHERE role = 'User'",
+      );
+      stats['Users'] = Sqflite.firstIntValue(userCount) ?? 0;
+
+      // Total Workers (All types)
+      List<Map<String, dynamic>> workerCount = await db.rawQuery(
+        "SELECT COUNT(*) as count FROM users WHERE role = 'Worker' OR role = 'Goods Taxi'",
+      );
+      stats['Total Workers'] = Sqflite.firstIntValue(workerCount) ?? 0;
+
+      // Approved Workers
+      List<Map<String, dynamic>> approvedCount = await db.rawQuery(
+        "SELECT COUNT(*) as count FROM users WHERE (role = 'Worker' OR role = 'Goods Taxi') AND isApproved = 1",
+      );
+      stats['Approved'] = Sqflite.firstIntValue(approvedCount) ?? 0;
+
+      // Pending Workers
+      List<Map<String, dynamic>> pendingCount = await db.rawQuery(
+        "SELECT COUNT(*) as count FROM users WHERE (role = 'Worker' OR role = 'Goods Taxi') AND isApproved = 0",
+      );
+      stats['Pending'] = Sqflite.firstIntValue(pendingCount) ?? 0;
+
+      // Workers by category (workType)
+      for (String role in workerRoles) {
+        String workTypeToQuery = role;
+        // Normalize for display and count
+        if (role == 'taxi') workTypeToQuery = 'Goods Taxi';
+
+        List<Map<String, dynamic>> categoryCount;
+        if (role == 'taxi') {
+          categoryCount = await db.rawQuery(
+            "SELECT COUNT(*) as count FROM users WHERE role = 'Goods Taxi'",
+          );
+        } else {
+          categoryCount = await db.rawQuery(
+            "SELECT COUNT(*) as count FROM users WHERE LOWER(workType) = ?",
+            [workTypeToQuery.toLowerCase()],
+          );
+        }
+
+        int count = Sqflite.firstIntValue(categoryCount) ?? 0;
+        if (count > 0) {
+          // Capitalize for display
+          String label =
+              role[0].toUpperCase() + role.substring(1).replaceAll('_', ' ');
+          stats[label] = count;
+        }
+      }
+    } catch (e) {
+      debugPrint("❌ Error fetching admin stats: $e");
+    }
+
+    return stats;
   }
 }

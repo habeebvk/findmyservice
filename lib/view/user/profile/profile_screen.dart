@@ -259,14 +259,16 @@ class _ProfilePageState extends State<ProfilePage> {
             child: const Text("No"),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(dialogContext); // Close dialog
-              AuthService().logout();
+              await AuthService().logout();
               // Navigate to login page
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (context) => LoginScreen()),
-              );
+              if (context.mounted) {
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => LoginScreen()),
+                );
+              }
             },
             child: const Text("Yes"),
           ),

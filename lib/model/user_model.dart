@@ -9,6 +9,8 @@ class UserModel {
   final String? phone;
   final String? location;
   final String? salary;
+  final String? experience;
+  final String? description;
   final int isApproved; // 0 for pending, 1 for approved
 
   UserModel({
@@ -22,6 +24,8 @@ class UserModel {
     this.phone,
     this.location,
     this.salary,
+    this.experience,
+    this.description,
     this.isApproved = 1, // Default to 1 (approved)
   });
 
@@ -37,6 +41,8 @@ class UserModel {
       'phone': phone,
       'location': location,
       'salary': salary,
+      'experience': experience,
+      'description': description,
       'isApproved': isApproved,
     };
   }
@@ -53,6 +59,8 @@ class UserModel {
       phone: map['phone'],
       location: map['location'],
       salary: map['salary'],
+      experience: map['experience'],
+      description: map['description'],
       isApproved: map['isApproved'] ?? 1,
     );
   }

@@ -15,12 +15,30 @@ class AdminApprovalScreen extends StatefulWidget {
 class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
   final DatabaseService _databaseService = DatabaseService();
   List<UserModel> _workers = [];
+  Map<String, int> _stats = {};
   bool _isLoadingWorkers = false;
+  bool _isLoadingStats = false;
 
   @override
   void initState() {
     super.initState();
-    _loadWorkers();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    await Future.wait([_loadWorkers(), _loadStats()]);
+  }
+
+  Future<void> _loadStats() async {
+    setState(() => _isLoadingStats = true);
+    try {
+      final stats = await _databaseService.getAdminStats();
+      setState(() => _stats = stats);
+    } catch (e) {
+      debugPrint("Error loading stats: $e");
+    } finally {
+      setState(() => _isLoadingStats = false);
+    }
   }
 
   Future<void> _loadWorkers() async {
@@ -50,11 +68,37 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
         1,
       );
       if (result != -1) {
-        _loadWorkers();
+        _loadData();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text("${worker.name} approved successfully!"),
             backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteWorker(UserModel worker) async {
+    bool confirm = await showConfirmDialog(
+      "Are you sure you want to delete ${worker.name}? This action cannot be undone.",
+    );
+    if (confirm) {
+      if (worker.id == null) return;
+      final result = await _databaseService.deleteUser(worker.id!);
+      if (result != -1) {
+        _loadData();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("${worker.name} deleted successfully!"),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to delete ${worker.name}."),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -95,7 +139,7 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
       // Small delay to allow Navigator transition to finish smoothly
       Future.delayed(const Duration(milliseconds: 200), () {
         if (mounted) {
-          _loadWorkers();
+          _loadData();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text("Worker added successfully!"),
@@ -120,7 +164,7 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
             onPressed: () async {
               bool confirm = await showConfirmDialog("Log out of Admin Panel?");
               if (confirm) {
-                AuthService().logout();
+                await AuthService().logout();
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (context) => LoginScreen()),
@@ -142,18 +186,171 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
               ),
             )
           : RefreshIndicator(
-              onRefresh: _loadWorkers,
+              onRefresh: _loadData,
               color: Colors.orange,
               child: ListView.builder(
                 padding: EdgeInsets.all(16),
-                itemCount: _workers.length,
+                itemCount: _workers.length + 1,
                 itemBuilder: (context, index) {
-                  final w = _workers[index];
+                  if (index == 0) {
+                    return _buildStatsDashboard();
+                  }
+                  final w = _workers[index - 1];
                   return _buildWorkerListCard(w);
                 },
               ),
             ),
     );
+  }
+
+  Widget _buildStatsDashboard() {
+    if (_isLoadingStats && _stats.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(bottom: 20),
+        child: Center(child: CircularProgressIndicator(color: Colors.orange)),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: Text(
+            "Dashboard Overview",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 100,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: _stats.entries.map((e) {
+              return _buildStatCard(
+                e.key,
+                e.value.toString(),
+                _getStatColor(e.key),
+                _getStatIcon(e.key),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: Text(
+            "Worker Management",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCard(
+    String title,
+    String value,
+    Color color,
+    IconData icon,
+  ) {
+    return Container(
+      width: 140,
+      margin: const EdgeInsets.only(right: 12, bottom: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: color.withAlpha(30),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: color.withAlpha(40), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 18, color: color),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getStatColor(String key) {
+    switch (key) {
+      case 'Users':
+        return Colors.blue;
+      case 'Total Workers':
+        return Colors.orange;
+      case 'Approved':
+        return Colors.green;
+      case 'Pending':
+        return Colors.red;
+      default:
+        return Colors.purple;
+    }
+  }
+
+  IconData _getStatIcon(String key) {
+    switch (key) {
+      case 'Users':
+        return Icons.people;
+      case 'Total Workers':
+        return Icons.engineering;
+      case 'Approved':
+        return Icons.check_circle;
+      case 'Pending':
+        return Icons.hourglass_empty;
+      case 'Taxi':
+      case 'Goods Taxi':
+        return Icons.local_taxi;
+      case 'Plumber':
+        return Icons.plumbing;
+      case 'Electrician':
+        return Icons.electrical_services;
+      case 'Carpenter':
+        return Icons.construction;
+      default:
+        return Icons.category;
+    }
   }
 
   Widget _buildWorkerListCard(UserModel w) {
@@ -174,7 +371,13 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                 CircleAvatar(
                   radius: 25,
                   backgroundColor: Colors.orange.shade300,
-                  child: Icon(Icons.person, size: 30, color: Colors.white),
+                  backgroundImage:
+                      w.profilePic != null && w.profilePic!.isNotEmpty
+                      ? NetworkImage(w.profilePic!)
+                      : null,
+                  child: w.profilePic == null || w.profilePic!.isEmpty
+                      ? const Icon(Icons.person, size: 30, color: Colors.white)
+                      : null,
                 ),
                 SizedBox(width: 12),
                 Expanded(
@@ -219,16 +422,23 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
                     ],
                   ),
                 ),
+                _buildRatingFlag(w),
                 if (w.isApproved == 0)
                   IconButton(
                     onPressed: () => _approveWorker(w),
                     icon: Icon(Icons.check_circle, color: Colors.green),
                     tooltip: "Approve Worker",
                   ),
+                IconButton(
+                  onPressed: () => _deleteWorker(w),
+                  icon: Icon(Icons.delete, color: Colors.redAccent),
+                  tooltip: "Delete Worker",
+                ),
               ],
             ),
             SizedBox(height: 10),
             RowUI("Work Type", w.workType ?? "Not Specified"),
+            RowUI("Experience", w.experience ?? "N/A"),
             RowUI("Salary/hr", "₹${w.salary ?? '0'}"),
             RowUI("Phone", w.phone ?? "N/A"),
             RowUI("Location", w.location ?? "N/A"),
@@ -247,6 +457,69 @@ class _AdminApprovalScreenState extends State<AdminApprovalScreen> {
           Expanded(child: Text(value, overflow: TextOverflow.ellipsis)),
         ],
       ),
+    );
+  }
+
+  Widget _buildRatingFlag(UserModel w) {
+    return FutureBuilder<double?>(
+      future: _databaseService.getWorkerAverageRating(
+        workerName: w.name,
+        role: w.workType ?? (w.role == 'Goods Taxi' ? 'taxi' : null),
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          );
+        }
+
+        final rating = snapshot.data;
+        if (rating == null) {
+          return const Text(
+            "No reviews",
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          );
+        }
+
+        final bool isRedFlag = rating <= 2.0;
+        return Tooltip(
+          message: "Avg Rating: ${rating.toStringAsFixed(1)}",
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: isRedFlag
+                  ? Colors.red.withAlpha(40)
+                  : Colors.green.withAlpha(40),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isRedFlag ? Colors.red : Colors.green,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.flag,
+                  size: 14,
+                  color: isRedFlag ? Colors.red : Colors.green,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  isRedFlag ? "Red Flag" : "Green Flag",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: isRedFlag ? Colors.red : Colors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

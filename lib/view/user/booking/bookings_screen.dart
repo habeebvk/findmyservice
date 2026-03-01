@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../../services/database_service.dart';
 import '../../../model/user_request.dart';
+import '../../../services/razorpay_service.dart';
+import '../../../services/auth_service.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 class UserBookingPage extends StatefulWidget {
   @override
@@ -135,7 +138,10 @@ class _UserBookingPageState extends State<UserBookingPage>
                         padding: EdgeInsets.all(16),
                         itemCount: userRequests.length,
                         itemBuilder: (context, index) {
-                          return RequestCard(request: userRequests[index]);
+                          return RequestCard(
+                            request: userRequests[index],
+                            onPaymentComplete: _loadBookings,
+                          );
                         },
                       ),
 
@@ -146,7 +152,10 @@ class _UserBookingPageState extends State<UserBookingPage>
                         padding: EdgeInsets.all(16),
                         itemCount: taxiRequests.length,
                         itemBuilder: (context, index) {
-                          return RequestCard(request: taxiRequests[index]);
+                          return RequestCard(
+                            request: taxiRequests[index],
+                            onPaymentComplete: _loadBookings,
+                          );
                         },
                       ),
               ],
@@ -155,13 +164,73 @@ class _UserBookingPageState extends State<UserBookingPage>
   }
 }
 
-class RequestCard extends StatelessWidget {
+class RequestCard extends StatefulWidget {
   final UserRequest request;
+  final VoidCallback onPaymentComplete;
 
-  RequestCard({required this.request});
+  RequestCard({required this.request, required this.onPaymentComplete});
+
+  @override
+  State<RequestCard> createState() => _RequestCardState();
+}
+
+class _RequestCardState extends State<RequestCard> {
+  late RazorpayService _razorpayService;
+  final DatabaseService _databaseService = DatabaseService();
+
+  @override
+  void initState() {
+    super.initState();
+    _razorpayService = RazorpayService(
+      onSuccess: _handlePaymentSuccess,
+      onFailure: _handlePaymentFailure,
+    );
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    try {
+      await _databaseService.updatePaymentStatus(
+        widget.request.id!,
+        'paid',
+        transactionId: response.paymentId,
+        role: widget.request.service == 'Taxi Booking'
+            ? 'taxi'
+            : widget.request.service,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Payment Successful!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+        widget.onPaymentComplete();
+      }
+    } catch (e) {
+      debugPrint("Error updating payment status: $e");
+    }
+  }
+
+  void _handlePaymentFailure(PaymentFailureResponse response) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Payment Failed: ${response.message}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _razorpayService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final request = widget.request;
     return Card(
       margin: EdgeInsets.only(bottom: 16),
       child: Padding(
@@ -287,12 +356,25 @@ class RequestCard extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: request.paymentStatus == 'paid'
+                      ? null
+                      : () {
+                          final user = AuthService().currentUser;
+                          _razorpayService.openPayment(
+                            amount: request.price * 100, // to paise
+                            name: "Find My Services",
+                            description: "Payment for ${request.service}",
+                            contact: user?.phone ?? "9999999999",
+                            email: user?.email ?? "test@example.com",
+                          );
+                        },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
+                    backgroundColor: request.paymentStatus == 'paid'
+                        ? Colors.grey
+                        : Colors.orange,
                   ),
                   child: Text(
-                    'Pay Now',
+                    request.paymentStatus == 'paid' ? 'Paid' : 'Pay Now',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

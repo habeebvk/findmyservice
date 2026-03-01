@@ -7,6 +7,8 @@ class UserRequest {
   final String status;
   final int price;
   final String description;
+  final String paymentStatus;
+  final String? transactionId;
 
   UserRequest({
     this.id,
@@ -17,6 +19,8 @@ class UserRequest {
     required this.status,
     required this.price,
     required this.description,
+    this.paymentStatus = 'unpaid',
+    this.transactionId,
   });
 
   Map<String, dynamic> toMap() {
@@ -29,6 +33,8 @@ class UserRequest {
       'status': status,
       'price': price,
       'description': description,
+      'paymentStatus': paymentStatus,
+      'transactionId': transactionId,
     };
   }
 
@@ -42,6 +48,8 @@ class UserRequest {
       status: map['status'],
       price: map['price'],
       description: map['description'],
+      paymentStatus: map['paymentStatus'] ?? 'unpaid',
+      transactionId: map['transactionId'],
     );
   }
 }

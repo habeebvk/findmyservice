@@ -3,12 +3,16 @@ import '../../../services/database_service.dart';
 import '../../../model/user_request.dart';
 import '../../../model/review_model.dart';
 import '../../../services/auth_service.dart';
+import '../../../services/razorpay_service.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 class ServiceDetailPage extends StatefulWidget {
   final String? workerName;
   final String? serviceName;
   final int? price;
   final String? role;
+  final String? experience;
+  final String? description;
 
   const ServiceDetailPage({
     super.key,
@@ -16,6 +20,8 @@ class ServiceDetailPage extends StatefulWidget {
     this.serviceName,
     this.price,
     this.role,
+    this.experience,
+    this.description,
   });
 
   @override
@@ -31,36 +37,95 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
   TextEditingController reviewController = TextEditingController();
   int rating = 0;
 
+  late RazorpayService _razorpayService;
+
   @override
   void initState() {
     super.initState();
     _loadReviews();
+    _razorpayService = RazorpayService(
+      onSuccess: _handlePaymentSuccess,
+      onFailure: _handlePaymentFailure,
+    );
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    try {
+      final request = UserRequest(
+        service: widget.serviceName ?? "Expert Carpentry Services",
+        workerName: widget.workerName ?? "Jimmy Hadson",
+        customerName: AuthService().currentUser?.name ?? "Guest User",
+        requestDate: DateTime.now().toString().split('.')[0],
+        status: 'pending',
+        price: widget.price ?? 19,
+        description:
+            "Service request for ${widget.serviceName ?? "Expert Carpentry Services"}",
+        paymentStatus: 'paid',
+        transactionId: response.paymentId,
+      );
+
+      await _databaseService.insertBooking(request, role: widget.role);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Payment Successful! Booking request sent."),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint("Error saving booking after payment: $e");
+    }
+  }
+
+  void _handlePaymentFailure(PaymentFailureResponse response) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Payment Failed: ${response.message}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _razorpayService.dispose();
+    super.dispose();
   }
 
   Future<void> _loadReviews() async {
-  setState(() => _isLoadingReviews = true);
+    setState(() => _isLoadingReviews = true);
 
-  try {
-    final rawWorkerName = widget.workerName ?? 'Jimmy Hadson';
-    final rawRole = widget.role ?? 'service';
+    try {
+      final rawWorkerName = widget.workerName ?? 'Jimmy Hadson';
+      final rawRole = widget.role ?? 'service';
 
-    final normalizedWorkerName = rawWorkerName.trim().toLowerCase();
+      final normalizedWorkerName = rawWorkerName.trim().toLowerCase();
 
-    final fetchedReviews = await _databaseService.getReviews(
-      workerName: normalizedWorkerName,
-      role: rawRole,
-    );
+      final fetchedReviews = await _databaseService.getReviews(
+        workerName: normalizedWorkerName,
+        role: rawRole,
+      );
 
-    setState(() {
-      reviews = fetchedReviews;
-    });
-  } catch (e) {
-    debugPrint("Error loading reviews: $e");
-  } finally {
-    setState(() => _isLoadingReviews = false);
+      setState(() {
+        reviews = fetchedReviews;
+      });
+    } catch (e) {
+      debugPrint("Error loading reviews: $e");
+    } finally {
+      setState(() => _isLoadingReviews = false);
+    }
   }
-}
 
+  double get averageRating {
+    if (reviews.isEmpty) return 0.0;
+    double sum = reviews.fold(0, (prev, element) => prev + element.rating);
+    return sum / reviews.length;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -136,13 +201,19 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                     children: [
                       _buildInfoItem(
                         Icons.hourglass_bottom,
-                        "5+ years",
+                        widget.experience ?? "N/A",
                         "Experience",
                       ),
-                      _buildInfoItem(Icons.star, "4.5", "Rating"),
+                      _buildInfoItem(
+                        Icons.star,
+                        averageRating == 0
+                            ? "N/A"
+                            : averageRating.toStringAsFixed(1),
+                        "Rating",
+                      ),
                       _buildInfoItem(
                         Icons.attach_money,
-                        "₹${widget.price ?? 19}",
+                        "₹${widget.price ?? 0}",
                         "Per Hour",
                       ),
                     ],
@@ -156,8 +227,8 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "Jimmy Hadson is a seasoned carpenter with over 5 years hands-on expertise. "
-                    "Specialized in custom furniture, home renovations, and detailed woodwork.",
+                    widget.description ??
+                        "${widget.workerName ?? 'The provider'} is a seasoned professional with extensive hands-on expertise.",
                     style: TextStyle(
                       fontSize: 15,
                       color: Colors.grey[700],
@@ -248,19 +319,22 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                         onPressed: () async {
                           if (reviewController.text.isNotEmpty && rating > 0) {
                             try {
-                                final newReview = ReviewModel(
-                                  workerName: (widget.workerName ?? 'Jimmy Hadson')
-                                      .trim()
-                                      .toLowerCase(),
-                                  customerName: AuthService().currentUser?.name ?? 'Guest User',
-                                  rating: rating.toDouble(),
-                                  comment: reviewController.text.trim(),
-                                  date: DateTime.now().toIso8601String(),
-                                );
-                                await _databaseService.insertReview(
-                                  newReview,
-                                  role: widget.role ?? 'service',
-                                );
+                              final newReview = ReviewModel(
+                                workerName:
+                                    (widget.workerName ?? 'Jimmy Hadson')
+                                        .trim()
+                                        .toLowerCase(),
+                                customerName:
+                                    AuthService().currentUser?.name ??
+                                    'Guest User',
+                                rating: rating.toDouble(),
+                                comment: reviewController.text.trim(),
+                                date: DateTime.now().toIso8601String(),
+                              );
+                              await _databaseService.insertReview(
+                                newReview,
+                                role: widget.role ?? 'service',
+                              );
 
                               await _loadReviews();
 
@@ -358,46 +432,15 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      final databaseService = DatabaseService();
-                      final request = UserRequest(
-                        service:
-                            widget.serviceName ?? "Expert Carpentry Services",
-                        workerName: widget.workerName ?? "Jimmy Hadson",
-                        customerName:
-                            AuthService().currentUser?.name ?? "Guest User",
-                        requestDate: DateTime.now().toString().split('.')[0],
-                        status: 'pending',
-                        price: widget.price ?? 19,
-                        description:
-                            "Service request for ${widget.serviceName ?? "Expert Carpentry Services"}",
-                      );
-
-                      await databaseService.insertBooking(
-                        request,
-                        role: widget.role,
-                      );
-
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Booking request sent successfully!"),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                        Navigator.pop(context);
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text("Error booking service: $e"),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    }
+                  onPressed: () {
+                    final user = AuthService().currentUser;
+                    _razorpayService.openPayment(
+                      amount: (widget.price ?? 19) * 100, // to paise
+                      name: "Find My Services",
+                      description: "Booking ${widget.serviceName ?? "Service"}",
+                      contact: user?.phone ?? "9999999999",
+                      email: user?.email ?? "test@example.com",
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
@@ -438,11 +481,3 @@ class _ServiceDetailPageState extends State<ServiceDetailPage> {
     );
   }
 }
-
-
-
-
-
-
-
-
